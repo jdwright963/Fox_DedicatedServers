@@ -12,6 +12,10 @@ AFoxEffectActor::AFoxEffectActor()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
+	
+	// Pickups spawned by the server need to replicate so clients can see them.
+	bReplicates = true;
+	SetReplicateMovement(true);
 
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>("SceneRoot"));
 }
@@ -96,6 +100,9 @@ void AFoxEffectActor::StartRotation()
 
 void AFoxEffectActor::ApplyEffectToTarget(AActor* TargetActor, TSubclassOf<UGameplayEffect> GameplayEffectClass)
 {
+	// Gameplay effects from pickups should only be applied by the server.
+	if (!HasAuthority()) return;
+	
 	// If the target actor is an enemy (has the actor tag "Enemy") and effects should not be applied to enemies
 	// (bApplyEffectsToEnemies is false), return early
 	if (TargetActor->ActorHasTag(FName("Enemy")) && !bApplyEffectsToEnemies) return;
@@ -171,6 +178,9 @@ void AFoxEffectActor::ApplyEffectToTarget(AActor* TargetActor, TSubclassOf<UGame
 
 void AFoxEffectActor::OnOverlap(AActor* TargetActor)
 {
+	// Only the server should process pickup effects.
+	if (!HasAuthority()) return;
+	
 	// If the target actor is an enemy (has the actor tag "Enemy") and effects should not be applied to enemies
 	// (bApplyEffectsToEnemies is false), return early
 	if (TargetActor->ActorHasTag(FName("Enemy")) && !bApplyEffectsToEnemies) return;

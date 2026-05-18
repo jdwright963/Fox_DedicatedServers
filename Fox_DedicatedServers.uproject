@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.7",
+	"EngineAssociation": "{EAA00EB3-420D-D64B-2FA7-908722FA3760}",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -30,7 +30,7 @@
 		},
 		{
 			"Name": "Diversion",
-			"Enabled": true,
+			"Enabled": false,
 			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/7c8abd783acd4d66a5290a12a5d67523"
 		},
 		{

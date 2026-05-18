@@ -252,16 +252,8 @@ void AFoxCharacter::PossessedBy(AController* NewController)
 	// Init ability actor info for the server
 	InitAbilityActorInfo();
 	
-	// Load the player's saved progression data (level, XP, attributes, spell points) from disk and restore character 
-	// state based on whether this is a new game or a loaded save
-	LoadProgress();
-	
-	// Retrieve the current game mode and cast it to AFoxGameModeBase to access Fox-specific world state loading functionality
-	if (AFoxGameModeBase* FoxGameMode = Cast<AFoxGameModeBase>(UGameplayStatics::GetGameMode(this)))
-	{
-		// Restore the world state (enemy positions, item pickups, destructibles, checkpoints) from the save file for the current world/level
-		FoxGameMode->LoadWorldState(GetWorld());
-	}
+	InitializeDefaultAttributes();
+	AddCharacterAbilities();
 }
 
 void AFoxCharacter::LoadProgress()
@@ -276,7 +268,12 @@ void AFoxCharacter::LoadProgress()
 		ULoadScreenSaveGame* SaveData = FoxGameMode->RetrieveInGameSaveData();
 		
 		// Early return if save data retrieval failed to prevent accessing a null pointer
-		if (SaveData == nullptr) return;
+		if (SaveData == nullptr)
+		{
+			InitializeDefaultAttributes();
+			AddCharacterAbilities();
+			return;
+		}
 		
 		/**
 		 * Check if this is the player's first time loading into the game world

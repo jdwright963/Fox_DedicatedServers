@@ -54,6 +54,9 @@ void AFoxEnemySpawnVolume::BeginPlay()
 void AFoxEnemySpawnVolume::OnBoxOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
+	// Enemy spawning must only happen on the server. Clients should wait for the spawned enemies to replicate.
+	if (!HasAuthority()) return;
+	
 	// Exit early if the overlapping actor is not the player to prevent non-player actors from triggering enemy spawns
 	if (!OtherActor->Implements<UPlayerInterface>()) return;
 
