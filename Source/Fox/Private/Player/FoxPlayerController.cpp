@@ -35,9 +35,6 @@ void AFoxPlayerController::PlayerTick(float DeltaTime)
 	Super::PlayerTick(DeltaTime);
 	CursorTrace();
 	
-	// This relates to auto running and needs to be removed
-	AutoRun();
-	
 	// Updates the magic circle actor's world position to match the cursor's impact point
 	UpdateMagicCircleLocation();
 }
@@ -439,7 +436,6 @@ void AFoxPlayerController::AbilityInputTagPressed(FGameplayTag InputTag)
 		{
 			TargetingStatus = ETargetingStatus::NotTargeting;
 		}
-		bAutoRunning = false;
 	}
 	
 	/*
@@ -470,270 +466,34 @@ void AFoxPlayerController::AbilityInputTagPressed(FGameplayTag InputTag)
 
 void AFoxPlayerController::AbilityInputTagReleased(FGameplayTag InputTag)
 {
-	/*
-	   Checks if input released events should be blocked based on gameplay tags applied to the Ability System Component.
-
-	   Breaking down this line:
-	   1. GetASC(): Retrieves the cached UFoxAbilitySystemComponent pointer (or retrieves and caches it if not yet cached).
-	      Returns nullptr if the controlled pawn doesn't have an ASC. This null check is necessary to prevent crashes
-	      when attempting to call methods on a non-existent ASC.
-
-	   2. &&: Logical AND operator with short-circuit evaluation. If GetASC() returns nullptr (false), the right side
-	      of the expression is never evaluated, preventing a null pointer dereference when calling HasMatchingGameplayTag.
-
-	   3. GetASC()->HasMatchingGameplayTag(): Method from UAbilitySystemComponent that checks if any gameplay tags
-	      currently applied to this ASC match the provided tag. Returns true if a matching tag is found, false otherwise.
-	      Gameplay tags on the ASC can be added by active gameplay effects, active abilities, or directly through code,
-	      allowing dynamic control over which systems can process input.
-
-	   4. FFoxGameplayTags::Get().Player_Block_InputReleased: Retrieves the native C++ gameplay tag that indicates input
-	      released events should be blocked. When this tag is present on the ASC (e.g., applied by an ability like GA_Electrocute,
-	      a crowd control effect, a cutscene, or UI state), it prevents the player from triggering input release-related 
-	      actions. This provides a centralized way to disable input released processing without modifying every input handling function.
-
-	   If both conditions are true (ASC exists AND the blocking tag is present), the function returns early without
-	   forwarding the input to the ability system, effectively ignoring the player's input release.
-	 */
 	if (GetASC() && GetASC()->HasMatchingGameplayTag(FFoxGameplayTags::Get().Player_Block_InputReleased))
 	{
-		// Return early without processing the input released event, preventing ability release callbacks while input is blocked
 		return;
 	}
-	
-	// Checks if the InputTag input parameter is not the native C++ gameplay tag defined for the left mouse
-	// button
-	if (!InputTag.MatchesTagExact(FFoxGameplayTags::Get().InputTag_LMB))
-	{
-		// Checks if the ASC is not a null pointer
-		if (GetASC())
-		{
-			/*
-			   Forwards the held input event to the Ability System Component for processing.
-			   
-			   Breaking down this line:
-			   1. GetASC(): Retrieves the cached UFoxAbilitySystemComponent pointer (or retrieves and caches it
-			      if not yet cached). We've already verified this is non-null in the if statement above.
-			   
-			   2. ->AbilityInputTagReleased(InputTag): Calls the custom method on our UFoxAbilitySystemComponent that
-			      handles released input events. This method iterates through all activated abilities and calls
-			      their input released callbacks, allowing abilities to respond to released input (e.g., charging
-			      an attack, continuous channeling, or maintaining a blocking stance).
-			   
-			   3. InputTag parameter: The FGameplayTag identifying which input is being held (e.g., an ability
-			      hotkey like InputTag_1, InputTag_2, etc.). The ASC uses this tag to determine which abilities
-			      should respond to this held input event.
-			   
-			   Note: Left mouse button (LMB) input is intentionally excluded from this forwarding (checked above)
-			   because LMB has special handling for targeting and auto-running behavior in this controller. This will be
-			   removed.
-			 */
-			GetASC()->AbilityInputTagReleased(InputTag);
-		}
-		// We just tried to activate the ability (or the ASC was null pointer) so we can return early
-		return;
-	}
-	
-	// Checks if the ASC is not a null pointer. The contents of this if statement are outside any of the other if
-	// statements because we want to let the ASC know that we have released the input regardless
+
 	if (GetASC())
 	{
-		/*
-		   Forwards the left mouse button held input to the Ability System Component when targeting an enemy.
-		   
-		   Breaking down this line:
-		   1. GetASC(): Retrieves the cached UFoxAbilitySystemComponent pointer (or retrieves and caches it
-		      if not yet cached). We've already verified this is non-null in the if statement above.
-		   
-		   2. ->AbilityInputTagReleased(InputTag): Calls the custom method on our UFoxAbilitySystemComponent that
-		      handles released input events. This method iterates through all activated abilities and calls
-		      their input released callbacks, allowing abilities to respond to released input.
-		   
-		   3. InputTag parameter: The FGameplayTag for the left mouse button (InputTag_LMB). When targeting
-		      is active (cursor is over a valid enemy), holding LMB should trigger targeting-related abilities
-		      such as continuous attacks, channeled spells, or other combat actions directed at the enemy.
-		   
-		   Context: This code path is only reached when:
-		     - InputTag matches InputTag_LMB (checked at the start of the function)
-		     - bTargeting is true (meaning ThisActor is a valid enemy interface, set in AbilityInputTagPressed)
-		     - The player has released the left mouse button
-		   
-		   This allows abilities bound to LMB to differentiate between targeting behavior (this path) and
-		   auto-running behavior (when bTargeting is false). Once auto-run is removed, this special handling
-		   may be simplified or removed entirely.
-		*/
 		GetASC()->AbilityInputTagReleased(InputTag);
 	}
-	
-	// Checks if we're not targeting an enemy and shift key is not held, allowing auto-run behavior to trigger
-	if (TargetingStatus != ETargetingStatus::TargetingEnemy && !bShiftKeyDown)
+
+	// Reset targeting state when LMB is released
+	if (InputTag.MatchesTagExact(FFoxGameplayTags::Get().InputTag_LMB))
 	{
-		// Retrieves the pawn currently controlled by this player controller
-		const APawn* ControlledPawn = GetPawn();
-
-		// Checks if this was a short press and the pawn exists
-		if (FollowTime <= ShortPressThreshold && ControlledPawn)
-		{
-			// Checks if ThisActor is valid and implements the HighlightInterface, indicating it's an interactable object
-			// like a checkpoint that can receive move-to location data
-			if (IsValid(ThisActor) && ThisActor->Implements<UHighlightInterface>())
-			{
-				// Calls the SetMoveToLocation function on the actor implementing HighlightInterface, passing 
-				// CachedDestination to set the target location for movement or interaction
-				IHighlightInterface::Execute_SetMoveToLocation(ThisActor, CachedDestination);
-			}
-			// Checks if the ASC exists and the Player_Block_InputPressed tag is not present, allowing visual feedback for clicks when input is not blocked
-			else if (GetASC() && !GetASC()->HasMatchingGameplayTag(FFoxGameplayTags::Get().Player_Block_InputPressed))
-			{
-				// Spawns a Niagara particle system at the clicked location to provide visual feedback to the player indicating where they clicked on the ground
-				UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ClickNiagaraSystem, CachedDestination);
-			}
-			
-			// Calculates a navigation path from the controlled pawn's current location to the clicked destination
-			if (UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(this, ControlledPawn->GetActorLocation(), CachedDestination))
-			{
-				// Removes all existing spline points to prepare for the new navigation path
-				Spline->ClearSplinePoints();
-
-				// Iterates through each point in the navigation path and adds it to the spline in world space coordinates
-				for (const FVector& PointLoc : NavPath->PathPoints)
-				{
-					Spline->AddSplinePoint(PointLoc, ESplineCoordinateSpace::World);
-				}
-				
-				// Checks if the navigation path contains at least one point
-				if (NavPath->PathPoints.Num() > 0)
-				{
-					// Caches the final destination point from the navigation path for auto-run distance checking
-					CachedDestination = NavPath->PathPoints[NavPath->PathPoints.Num() - 1];
-
-					// Enables auto-run behavior so the character will follow the spline path
-					bAutoRunning = true;
-				}
-			}
-		}
-		// Resets the follow time counter to zero now that the left mouse button has been released
-		FollowTime = 0.f;
-
-		// Clears the targeting status since the left mouse button has been released
 		TargetingStatus = ETargetingStatus::NotTargeting;
+		FollowTime = 0.f;
 	}
 }
 
 void AFoxPlayerController::AbilityInputTagHeld(FGameplayTag InputTag)
 {
-	
-	/*
-	   Checks if input held events should be blocked based on gameplay tags applied to the Ability System Component.
-
-	   Breaking down this line:
-	   1. GetASC(): Retrieves the cached UFoxAbilitySystemComponent pointer (or retrieves and caches it if not yet cached).
-	      Returns nullptr if the controlled pawn doesn't have an ASC. This null check is necessary to prevent crashes
-	      when attempting to call methods on a non-existent ASC.
-
-	   2. &&: Logical AND operator with short-circuit evaluation. If GetASC() returns nullptr (false), the right side
-	      of the expression is never evaluated, preventing a null pointer dereference when calling HasMatchingGameplayTag.
-
-	   3. GetASC()->HasMatchingGameplayTag(): Method from UAbilitySystemComponent that checks if any gameplay tags
-	      currently applied to this ASC match the provided tag. Returns true if a matching tag is found, false otherwise.
-	      Gameplay tags on the ASC can be added by active gameplay effects, active abilities, or directly through code,
-	      allowing dynamic control over which systems can process input.
-
-	   4. FFoxGameplayTags::Get().Player_Block_InputHeld: Retrieves the native C++ gameplay tag that indicates input
-	      held events should be blocked. When this tag is present on the ASC (e.g., applied by an ability like GA_Electrocute,
-	      a crowd control effect, a cutscene, or UI state), it prevents the player from triggering continuous input-related 
-	      actions. This provides a centralized way to disable held input processing without modifying every input handling function.
-
-	   If both conditions are true (ASC exists AND the blocking tag is present), the function returns early without
-	   forwarding the input to the ability system, effectively ignoring the player's held input.
-	 */
 	if (GetASC() && GetASC()->HasMatchingGameplayTag(FFoxGameplayTags::Get().Player_Block_InputHeld))
 	{
-		// Return early without processing the input held event, preventing ability held callbacks while input is blocked
 		return;
 	}
-	
-	// Checks if the InputTag input parameter is not the native C++ gameplay tag defined for the left mouse
-	// button. We do this because we only want code after this if block to run if the input tag is for the LMB
-	if (!InputTag.MatchesTagExact(FFoxGameplayTags::Get().InputTag_LMB))
+
+	if (GetASC())
 	{
-		// Checks if the ASC is not a null pointer
-		if (GetASC())
-		{
-			/*
-			   Forwards the held input event to the Ability System Component for processing.
-			   
-			   Breaking down this line:
-			   1. GetASC(): Retrieves the cached UFoxAbilitySystemComponent pointer (or retrieves and caches it
-			      if not yet cached). We've already verified this is non-null in the if statement above.
-			   
-			   2. ->AbilityInputTagHeld(InputTag): Calls the custom method on our UFoxAbilitySystemComponent that
-			      handles continuous input events. This method iterates through all activated abilities and calls
-			      their input held callbacks, allowing abilities to respond to sustained input (e.g., charging
-			      an attack, continuous channeling, or maintaining a blocking stance).
-			   
-			   3. InputTag parameter: The FGameplayTag identifying which input is being held (e.g., an ability
-			      hotkey like InputTag_1, InputTag_2, etc.). The ASC uses this tag to determine which abilities
-			      should respond to this held input event.
-			   
-			   Note: Left mouse button (LMB) input is intentionally excluded from this forwarding (checked above)
-			   because LMB has special handling for targeting and auto-running behavior in this controller. This will be
-			   removed.
-			 */
-			GetASC()->AbilityInputTagHeld(InputTag);
-		}
-		// We just tried to activate the ability (or the ASC was null pointer) so we can return early
-		return;
-	}
-	// Checks if we're targeting an enemy or shift key is held, enabling ability activation instead of auto-run
-	if (TargetingStatus == ETargetingStatus::TargetingEnemy || bShiftKeyDown)
-	{
-		// Checks if the ASC is not a null pointer
-		if (GetASC())
-		{
-			/*
-			   Forwards the left mouse button held input to the Ability System Component when targeting an enemy.
-			   
-			   Breaking down this line:
-			   1. GetASC(): Retrieves the cached UFoxAbilitySystemComponent pointer (or retrieves and caches it
-			      if not yet cached). We've already verified this is non-null in the if statement above.
-			   
-			   2. ->AbilityInputTagHeld(InputTag): Calls the custom method on our UFoxAbilitySystemComponent that
-			      handles continuous input events. This method iterates through all activated abilities and calls
-			      their input held callbacks, allowing abilities to respond to sustained input.
-			   
-			   3. InputTag parameter: The FGameplayTag for the left mouse button (InputTag_LMB). When targeting
-			      is active (cursor is over a valid enemy), holding LMB should trigger targeting-related abilities
-			      such as continuous attacks, channeled spells, or other combat actions directed at the enemy.
-			   
-			   Context: This code path is only reached when:
-			     - InputTag matches InputTag_LMB (checked at the start of the function)
-			     - bTargeting is true (meaning ThisActor is a valid enemy interface, set in AbilityInputTagPressed)
-			     - The player is holding down the left mouse button
-			   
-			   This allows abilities bound to LMB to differentiate between targeting behavior (this path) and
-			   auto-running behavior (when bTargeting is false). Once auto-run is removed, this special handling
-			   may be simplified or removed entirely.
-			*/
-			GetASC()->AbilityInputTagHeld(InputTag);
-		}
-	}
-	// Checks if bTargeting is false and if so implements the auto running behavior. Remove!!!
-	else
-	{
-		// Increments follow time
-		FollowTime += GetWorld()->GetDeltaSeconds();
-		
-		// We do not care about this it will be removed
-		if (CursorHit.bBlockingHit)
-		{
-			CachedDestination = CursorHit.ImpactPoint;
-		}
-		
-		if (APawn* ControlledPawn = GetPawn())
-		{
-			const FVector WorldDirection = (CachedDestination - ControlledPawn->GetActorLocation()).GetSafeNormal();
-			ControlledPawn->AddMovementInput(WorldDirection);
-		}
+		GetASC()->AbilityInputTagHeld(InputTag);
 	}
 }
 
