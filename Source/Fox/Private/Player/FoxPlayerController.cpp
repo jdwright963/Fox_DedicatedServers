@@ -254,7 +254,6 @@ void AFoxPlayerController::UpdateMagicCircleLocation()
 	}
 }
 
-// We do not want the parts of this cursor trace that highlights actors in the final game this all needs to be removed
 void AFoxPlayerController::CursorTrace()
 {
 	// Checks if the ASC exists and has the Player_Block_CursorTrace tag, which blocks cursor trace processing
@@ -278,15 +277,59 @@ void AFoxPlayerController::CursorTrace()
 		// Returns early to prevent cursor trace processing when it's blocked by gameplay tags
 		return;
 	}
+	
+	// Define the Start and End of the trace
+	FVector TraceStart;
+	FVector TraceDirection;
+	
+	APawn* ControlledPawn = GetPawn();
+	if (ControlledPawn)
+	{
+		// This gets the camera location (the eyes)
+		TraceStart = ControlledPawn->GetPawnViewLocation(); 
+		
+		// This gets the direction the camera is pointing
+		TraceDirection = ControlledPawn->GetViewRotation().Vector();
+	}
+	else
+	{
+		return; 
+	}
 
+	// Trace 50 meters (5000 units) out into the world
+	FVector TraceEnd = TraceStart + (TraceDirection * 5000.f);
+	
+	// Set up the Trace Parameters
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(ControlledPawn); 
+	
 	// Sets the trace channel to ECC_ExcludePlayers if MagicCircle is valid, otherwise uses ECC_Visibility
 	const ECollisionChannel TraceChannel = IsValid(MagicCircle) ? ECC_ExcludePlayers : ECC_Visibility;
-
+	
+	// Perform the actual Line Trace
+	// This fills the 'CursorHit' variable just like the old mouse trace did
+	GetWorld()->LineTraceSingleByChannel(
+		CursorHit, 
+		TraceStart, 
+		TraceEnd, 
+		TraceChannel, 
+		QueryParams
+	);
+	
+	// Logic for highlighting (Same as your original code)
+	if (!CursorHit.IsValidBlockingHit())
+	{
+		// If we hit nothing, unhighlight the current actor and clear it
+		if (ThisActor) UnHighlightActor(ThisActor);
+		ThisActor = nullptr;
+		return;
+	}
+	
 	// Performs a line trace using TraceChannel from the cursor's screen position into the world and stores the hit result in CursorHit
-	GetHitResultUnderCursor(TraceChannel, false, CursorHit);
+	//GetHitResultUnderCursor(TraceChannel, false, CursorHit);
 	
 	// Returns early if the cursor trace didn't hit any valid blocking geometry in the world
-	if (!CursorHit.IsValidBlockingHit()) return;
+	//if (!CursorHit.IsValidBlockingHit()) return;
 	
 	/*
 	   Stores the actor from the previous frame's cursor trace into LastActor for comparison.

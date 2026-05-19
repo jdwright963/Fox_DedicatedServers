@@ -141,6 +141,30 @@ void UTargetDataUnderMouse::SendMouseCursorData()
 	 * through the mouse cursor position into the world, allowing us to determine what the player is pointing at.
 	*/
 	FHitResult CursorHit;
+	
+	int32 ViewportSizeX, ViewportSizeY;
+	PC->GetViewportSize(ViewportSizeX, ViewportSizeY);
+	FVector2D ScreenLocation(ViewportSizeX * 0.5f, ViewportSizeY * 0.5f);
+
+	// Instead of 'Under Cursor', we use 'At Screen Position' (the center)
+	PC->GetHitResultAtScreenPosition(ScreenLocation, ECC_Target, false, CursorHit);
+
+	// FALLBACK: If we hit the sky (nothing), the fireball needs a destination.
+	// Otherwise, ImpactPoint will be 0,0,0 and the fireball will fly into the floor.
+	if (!CursorHit.bBlockingHit)
+	{
+		FVector TraceStart;
+		FRotator TraceRotation; 
+
+		// Pass the out parameters into the function
+		PC->GetPlayerViewPoint(TraceStart, TraceRotation); 
+
+		// Convert that rotation into a direction vector
+		FVector TraceDirection = TraceRotation.Vector();
+
+		// Calculate the destination 50 meters away
+		CursorHit.ImpactPoint = TraceStart + (TraceDirection * 5000.f);
+	}
 
 	/*
 	 * Performs a line trace (raycast) from the camera through the screen position of the mouse cursor into the 3D world.
@@ -172,10 +196,7 @@ void UTargetDataUnderMouse::SendMouseCursorData()
 	 * The function returns a boolean indicating whether a blocking hit occurred, but we don't capture that return value here
 	 * because we can check CursorHit.bBlockingHit directly, which provides the same information and is more explicit in the code.
 	*/
-	PC->GetHitResultUnderCursor(ECC_Target, false, CursorHit);
-	
-	// Creates a variable to hold the target data handle
-	FGameplayAbilityTargetDataHandle DataHandle;
+	//PC->GetHitResultUnderCursor(ECC_Target, false, CursorHit);
 	
 	/*
 	 * Creates a new instance of FGameplayAbilityTargetData_SingleTargetHit on the heap using the new operator.
@@ -212,6 +233,9 @@ void UTargetDataUnderMouse::SendMouseCursorData()
 	
 	// Assigns the hit result to the target data
 	Data->HitResult = CursorHit;
+	
+	// Creates a variable to hold the target data handle
+	FGameplayAbilityTargetDataHandle DataHandle;
 	
 	// Adds a new target data to handle, it must have been created with new
 	DataHandle.Add(Data);
