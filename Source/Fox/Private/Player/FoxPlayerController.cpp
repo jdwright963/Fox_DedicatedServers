@@ -733,12 +733,14 @@ void AFoxPlayerController::BeginPlay()
 		Subsystem->AddMappingContext(FoxContext, 0);
 	}
 	
-	bShowMouseCursor = true;
+	bShowMouseCursor = false;
 	DefaultMouseCursor = EMouseCursor::Default;
 	
-	FInputModeGameAndUI InputModeData;
-	InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	InputModeData.SetHideCursorDuringCapture(false);
+	//FInputModeGameAndUI InputModeData;
+	FInputModeGameOnly InputModeData;
+	
+	//InputModeData.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	//InputModeData.SetHideCursorDuringCapture(false);
 	SetInputMode(InputModeData);
 }
 
@@ -755,6 +757,8 @@ void AFoxPlayerController::SetupInputComponent()
 	   This allows for smooth continuous movement as long as WASD keys are held down.
 	 */
 	FoxInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AFoxPlayerController::Move);
+	
+	FoxInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AFoxPlayerController::Look);
 	
 	// Binds callback functions for ShiftAction input action that set the value of bShiftKeyPressed
 	FoxInputComponent->BindAction(ShiftAction, ETriggerEvent::Started, this, &AFoxPlayerController::ShiftPressed);
@@ -823,6 +827,20 @@ void AFoxPlayerController::Move(const FInputActionValue& InputActionValue)
 		// Y is forward in WASD input action
 		ControlledPawn->AddMovementInput(ForwardDirection, InputAxisVector.Y);
 		ControlledPawn->AddMovementInput(RightDirection, InputAxisVector.X);
+	}
+}
+
+void AFoxPlayerController::Look(const struct FInputActionValue& InputActionValue)
+{
+	const FVector2D LookAxisVector = InputActionValue.Get<FVector2D>();
+
+	if (APawn* ControlledPawn = GetPawn())
+	{
+		// Add left/right rotation
+		ControlledPawn->AddControllerYawInput(LookAxisVector.X);
+		
+		// Add up/down rotation
+		ControlledPawn->AddControllerPitchInput(LookAxisVector.Y);
 	}
 }
 

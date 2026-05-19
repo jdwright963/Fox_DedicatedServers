@@ -24,109 +24,17 @@
 
 AFoxCharacter::AFoxCharacter()
 {
+	// Create and configure the first-person camera
+	FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>("FirstPersonCamera");
+	FirstPersonCameraComponent->SetupAttachment(GetMesh(), FName("HeadSocket")); // Attach to head socket
+	FirstPersonCameraComponent->bUsePawnControlRotation = true;
 	
-	/**
-	 * Create the camera boom (spring arm) component for positioning the camera
-	 * 
-	 * USpringArmComponent acts as a movable arm that the camera attaches to. It provides:
-	 * - Distance control between the camera and character (arm length)
-	 * - Smooth camera following behavior with optional lag
-	 * - Collision detection to prevent camera clipping through walls (disabled below)
-	 * 
-	 * For top-down games, the boom is typically positioned above and angled down at the character.
-	 */
-	CameraBoom = CreateDefaultSubobject<USpringArmComponent>("CameraBoom");
-
-	/**
-	 * Attach the camera boom to the character's root component
-	 * 
-	 * GetRootComponent() returns the character's capsule component (from ACharacter class)
-	 * This makes the camera boom follow the character's position as they move through the world
-	 */
-	CameraBoom->SetupAttachment(GetRootComponent());
-
-	/**
-	 * Use absolute rotation instead of inheriting rotation from the parent component
-	 * 
-	 * When true:
-	 * - The boom maintains a fixed world rotation (e.g., always pointing down from above)
-	 * - Character rotation doesn't affect camera orientation
-	 * - Perfect for top-down games where the camera should stay at a constant angle and not rotate with the character
-	 * 
-	 * When false (default):
-	 * - The boom would rotate with the character, causing the camera to spin around
-	 * - Useful for third-person cameras that follow behind the character's back
-	 */
-	CameraBoom->SetUsingAbsoluteRotation(true);
-
-	/**
-	 * Disable collision testing for the camera boom
-	 * 
-	 * By default, USpringArmComponent performs collision checks and pulls the camera closer
-	 * when objects are between the camera and target (to prevent clipping through walls)
-	 * 
-	 * For top-down games:
-	 * - Camera is positioned high above the scene looking down
-	 * - Collision detection is unnecessary and could cause unwanted camera movement
-	 * 
-	 * For third-person games, you'd typically leave this as true (default)
-	 */
-	CameraBoom->bDoCollisionTest = false;
-
-	/**
-	 * Create the top-down camera component
-	 * 
-	 * UCameraComponent is the actual camera that renders the scene from the player's view
-	 * It must be attached to something (usually a spring arm) to position it in the world
-	 * The camera's location and rotation determine what the player sees on screen
-	 */
-	TopDownCameraComponent = CreateDefaultSubobject<UCameraComponent>("TopDownCameraComponent");
-
-	/**
-	 * Attach the camera to the end of the spring arm
-	 * 
-	 * USpringArmComponent::SocketName is a predefined socket at the tip of the spring arm
-	 * This positions the camera at the boom's endpoint, looking toward the character
-	 * The camera will follow the boom's position (but not the character's rotation
-	 * due to SetUsingAbsoluteRotation above)
-	 */
-	TopDownCameraComponent->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-
+	// Make the character automatically rotate to face the direction of movement
+	GetCharacterMovement()->bOrientRotationToMovement = false;
 	
-	/**
-	 * Disable pawn control rotation for the camera
-	 * 
-	 * When false (set here):
-	 * - Camera rotation is NOT controlled by player controller input (mouse/gamepad look)
-	 * - Camera maintains its fixed orientation set in the editor or through absolute rotation
-	 * - Perfect for top-down games where the camera angle is fixed from above
-	 * 
-	 * When true (default for third-person):
-	 * - Player controller input (mouse movement, right stick) rotates the camera
-	 * - Allows free-look camera control for third-person or first-person games
-	 * 
-	 * Key difference from CameraBoom->SetUsingAbsoluteRotation (set above):
-	 * - SetUsingAbsoluteRotation(true): Spring arm ignores PARENT rotation (character rotation doesn't affect boom)
-	 *   * Boom stays at fixed world rotation even when character spins around
-	 *   * Without this, when character rotates, the boom and camera would orbit around them
-	 * 
-	 * - bUsePawnControlRotation = false: Camera ignores CONTROLLER INPUT rotation (mouse look disabled)
-	 *   * Player cannot manually rotate the camera with mouse/gamepad
-	 *   * Without this, player could free-look and rotate the camera away from the top-down view
-	 * 
-	 * Both work together for top-down view:
-	 * 1. SetUsingAbsoluteRotation keeps boom fixed when CHARACTER rotates (character spins, camera doesn't)
-	 * 2. bUsePawnControlRotation = false prevents PLAYER INPUT from rotating camera (no mouse look)
-	 * 
-	 * Example without SetUsingAbsoluteRotation: Character turns right → boom orbits → camera circles around character
-	 * Example without bUsePawnControlRotation: Player moves mouse → camera tilts/rotates → loses top-down angle
-	 * 
-	 * Note: This is also different from bUseControllerRotationYaw (disabled below)
-	 * - bUsePawnControlRotation affects the camera component itself
-	 * - bUseControllerRotationYaw affects the character's rotation
-	 */
-	TopDownCameraComponent->bUsePawnControlRotation = false;
-	
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationRoll = false;
+	bUseControllerRotationYaw = true;
 	
 	// Create a Niagara particle system component for playing visual effects when the character levels up
 	LevelUpNiagaraComponent = CreateDefaultSubobject<UNiagaraComponent>("LevelUpNiagaraComponent");
@@ -136,9 +44,6 @@ AFoxCharacter::AFoxCharacter()
 
 	// Disable automatic activation. The effect should only play when triggered manually during level-up events
 	LevelUpNiagaraComponent->bAutoActivate = false;
-	
-	// Make the character automatically rotate to face the direction of movement
-	GetCharacterMovement()->bOrientRotationToMovement = true;
 	
 	/**
 	 * Set rotation speed (yaw) to 400 degrees per second for smooth turning
@@ -198,34 +103,6 @@ AFoxCharacter::AFoxCharacter()
 	 * - Only affects the initial velocity state, not ongoing position changes from walking
 	 */
 	GetCharacterMovement()->bSnapToPlaneAtStart = true;
-	
-	/**
-	 * Disable controller rotation inheritance for top-down gameplay
-	 * 
-	 * Understanding Controller Rotation vs Character Rotation:
-	 * - CONTROLLER ROTATION: The direction the player's camera/view is looking (controlled by mouse/gamepad)
-	 * - CHARACTER ROTATION: The direction the character mesh is facing in the world
-	 * 
-	 * What these settings do:
-	 * - By default, characters automatically rotate to match their controller's rotation
-	 * - Setting these to false DECOUPLES character rotation from controller rotation
-	 * - The character can face one direction while the camera looks in another direction
-	 * 
-	 * Why disable for top-down games:
-	 * - In top-down view, the camera looks down at the character from above (fixed pitch angle)
-	 * - We don't want the character to tilt or rotate to match the camera's downward angle
-	 * - Instead, we use bOrientRotationToMovement to make the character face their movement direction
-	 * - This creates natural, intuitive movement where the character faces where they're walking
-	 * 
-	 * Axis Breakdown:
-	 * - Pitch (false): Character won't tilt up/down to match camera's downward viewing angle
-	 * - Roll (false): Character won't roll/tilt sideways based on controller input
-	 * - Yaw (false): Character won't automatically turn left/right to match controller rotation
-	 *                (rotation is handled by bOrientRotationToMovement instead)
-	 */
-	bUseControllerRotationPitch = false;
-	bUseControllerRotationRoll = false;
-	bUseControllerRotationYaw = false;
 
 	/**
 	 * Set default character class for player characters
@@ -243,6 +120,88 @@ AFoxCharacter::AFoxCharacter()
 	 * Note: Enemy characters will have their CharacterClass set in their respective Blueprint classes.
 	 */
 	CharacterClass = ECharacterClass::Elementalist;
+	
+	/**
+	 * Create the camera boom (spring arm) component for positioning the camera
+	 * 
+	 * USpringArmComponent acts as a movable arm that the camera attaches to. It provides:
+	 * - Distance control between the camera and character (arm length)
+	 * - Smooth camera following behavior with optional lag
+	 * - Collision detection to prevent camera clipping through walls (disabled below)
+	 * 
+	 * For top-down games, the boom is typically positioned above and angled down at the character.
+	 */
+	//CameraBoom = CreateDefaultSubobject<USpringArmComponent>("CameraBoom");
+
+	/**
+	 * Attach the camera boom to the character's root component
+	 * 
+	 * GetRootComponent() returns the character's capsule component (from ACharacter class)
+	 * This makes the camera boom follow the character's position as they move through the world
+	 */
+	//CameraBoom->SetupAttachment(GetRootComponent());
+	
+	//CameraBoom->TargetArmLength = 300.f; // Distance behind the character
+	//CameraBoom->bUsePawnControlRotation = true;
+
+	// Create and configure the third-person camera
+	//ThirdPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>("ThirdPersonCamera");
+	
+	/**
+	 * Attach the camera to the end of the spring arm
+	 * 
+	 * USpringArmComponent::SocketName is a predefined socket at the tip of the spring arm
+	 * This positions the camera at the boom's endpoint, looking toward the character
+	 * The camera will follow the boom's position (but not the character's rotation
+	 * due to SetUsingAbsoluteRotation above)
+	 */
+	//ThirdPersonCameraComponent->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	
+	/**
+	 * Create the camera component
+	 * 
+	 * UCameraComponent is the actual camera that renders the scene from the player's view
+	 * It must be attached to something (usually a spring arm) to position it in the world
+	 * The camera's location and rotation determine what the player sees on screen
+	 */
+	//FoxCameraComponent = CreateDefaultSubobject<UCameraComponent>("CameraComponent");
+
+
+	//FoxCameraComponent->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	
+	/**
+	 * Disable pawn control rotation for the camera
+	 * 
+	 * When false (set here):
+	 * - Camera rotation is NOT controlled by player controller input (mouse/gamepad look)
+	 * - Camera maintains its fixed orientation set in the editor or through absolute rotation
+	 * - Perfect for top-down games where the camera angle is fixed from above
+	 * 
+	 * When true (default for third-person):
+	 * - Player controller input (mouse movement, right stick) rotates the camera
+	 * - Allows free-look camera control for third-person or first-person games
+	 * 
+	 * Key difference from CameraBoom->SetUsingAbsoluteRotation (used to be set above):
+	 * - SetUsingAbsoluteRotation(true): Spring arm ignores PARENT rotation (character rotation doesn't affect boom)
+	 *   * Boom stays at fixed world rotation even when character spins around
+	 *   * Without this, when character rotates, the boom and camera would orbit around them
+	 * 
+	 * - bUsePawnControlRotation = false: Camera ignores CONTROLLER INPUT rotation (mouse look disabled)
+	 *   * Player cannot manually rotate the camera with mouse/gamepad
+	 *   * Without this, player could free-look and rotate the camera away from the top-down view
+	 * 
+	 * Both work together for top-down view (Old view):
+	 * 1. SetUsingAbsoluteRotation keeps boom fixed when CHARACTER rotates (character spins, camera doesn't)
+	 * 2. bUsePawnControlRotation = false prevents PLAYER INPUT from rotating camera (no mouse look)
+	 * 
+	 * Example without SetUsingAbsoluteRotation: Character turns right → boom orbits → camera circles around character
+	 * Example without bUsePawnControlRotation: Player moves mouse → camera tilts/rotates → loses top-down angle
+	 * 
+	 * Note: This is also different from bUseControllerRotationYaw (disabled below)
+	 * - bUsePawnControlRotation affects the camera component itself
+	 * - bUseControllerRotationYaw affects the character's rotation
+	 */
+	//FoxCameraComponent->bUsePawnControlRotation = false;
 }
 
 void AFoxCharacter::PossessedBy(AController* NewController)
@@ -444,12 +403,12 @@ void AFoxCharacter::MulticastLevelUpParticles_Implementation() const
 		 * Get the camera's current world location
 		 * 
 		 * GetComponentLocation() returns an FVector containing the X, Y, Z coordinates
-		 * of where the TopDownCameraComponent is positioned in world space (not relative to parent)
+		 * of where the FoxCameraComponent is positioned in world space (not relative to parent)
 		 * 
 		 * We need this position to calculate which direction the particle effect should face
 		 * The particle effect will be rotated to look at this camera location
 		 */
-		const FVector CameraLocation = TopDownCameraComponent->GetComponentLocation();
+		const FVector CameraLocation = FirstPersonCameraComponent->GetComponentLocation();	
 
 		/**
 		 * Get the Niagara particle system's current world location
@@ -1139,9 +1098,9 @@ void AFoxCharacter::Die(const FVector& DeathImpulse)
 	 *     - Timer would continue firing until manually cleared with ClearTimer(DeathTimer)
 	 */
 	GetWorldTimerManager().SetTimer(DeathTimer, DeathTimerDelegate, DeathTime, false);
-
+	
 	// Detach the camera from the character while maintaining its current world position and rotation, preventing it from following the ragdolling corpse
-	TopDownCameraComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+	FirstPersonCameraComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
 }
 
 void AFoxCharacter::OnRep_Stunned()

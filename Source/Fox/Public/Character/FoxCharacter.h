@@ -240,7 +240,6 @@ public:
 	 */
 	virtual void OnRep_Burned() override;
 	
-	
 	/**
 	 * LoadProgress - Load the player's saved progress from a checkpoint
 	 * 
@@ -264,26 +263,12 @@ private:
 	 * 
 	 * VisibleAnywhere: Allows viewing and selecting this component in the editor for positioning adjustments
 	 */
-	UPROPERTY(VisibleAnywhere)
-	TObjectPtr<UCameraComponent> TopDownCameraComponent;
-
-	/**
-	 * CameraBoom - Spring arm component that positions the camera at a distance from the character
-	 * 
-	 * This spring arm (USpringArmComponent) acts as a flexible boom that holds the TopDownCameraComponent
-	 * at a specified distance and angle from the character. It provides several important features:
-	 * 
-	 * KEY FEATURES:
-	 * - Distance Control: Maintains a fixed distance between the character and camera
-	 * - Smooth Movement: Can interpolate camera position for smooth following behavior
-	 * - Collision Handling: Can pull the camera closer if the boom collides with world geometry,
-	 *   preventing the camera from clipping through walls or objects
-	 * - Rotation Control: Defines the angle at which the camera looks at the character (e.g., 45-degree angle for top-down)
-	 * 
-	 * VisibleAnywhere: Allows viewing and adjusting this component in the editor to fine-tune camera positioning
-	 */
-	UPROPERTY(VisibleAnywhere)
-	TObjectPtr<USpringArmComponent> CameraBoom;
+	//UPROPERTY(VisibleAnywhere)
+	//TObjectPtr<UCameraComponent> FoxCameraComponent;
+	
+	// First-person camera component
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+	UCameraComponent* FirstPersonCameraComponent;
 	
 	/**
 	 * InitAbilityActorInfo - Initialize Ability System Component actor information
@@ -330,7 +315,6 @@ private:
 	 * that differs from the base character class implementation.
 	*/
 	virtual void InitAbilityActorInfo() override;
-	
 	
 	/**
 	 * MulticastLevelUpParticles - Replicate level-up particle effect to all clients

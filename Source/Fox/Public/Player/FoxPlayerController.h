@@ -70,6 +70,10 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Input")
 	TObjectPtr<UInputAction> MoveAction;
 	
+	// Input action for character look set in the blueprint for this class.
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TObjectPtr<UInputAction> LookAction;
+	
 	// Input action set in the blueprint for this class
 	UPROPERTY(EditAnywhere, Category = "Input")
 	TObjectPtr<UInputAction> ShiftAction;
@@ -78,9 +82,8 @@ private:
 	void ShiftPressed() { bShiftKeyDown = true; };
 	void ShiftReleased() { bShiftKeyDown = false; };
 	bool bShiftKeyDown;
-	
 	void Move(const FInputActionValue& InputActionValue);
-	
+	void Look(const struct FInputActionValue& InputActionValue);
 	void CursorTrace();
 	
 	// A dual-pointer container that stores both the underlying UObject and its 
