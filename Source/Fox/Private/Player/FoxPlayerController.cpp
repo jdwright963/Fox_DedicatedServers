@@ -775,6 +775,28 @@ void AFoxPlayerController::SetupInputComponent()
 	   to identify which ability should be activated, deactivated, or updated.
 	 */
 	FoxInputComponent->BindAbilityActions(InputConfig, this, &ThisClass::AbilityInputTagPressed, &ThisClass::AbilityInputTagReleased, &ThisClass::AbilityInputTagHeld);
+	
+	FoxInputComponent->BindAction(MenuAction, ETriggerEvent::Started, this, &AFoxPlayerController::ToggleMenu);
+
+}
+
+void AFoxPlayerController::ToggleMenu()
+{
+	bIsMenuOpen = !bIsMenuOpen;
+	bShowMouseCursor = bIsMenuOpen;
+
+	if (bIsMenuOpen)
+	{
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
+		SetInputMode(InputMode);
+	}
+	else
+	{
+		FInputModeGameOnly InputMode;
+		SetInputMode(InputMode);
+	}
+	OnMenuToggled(bIsMenuOpen);
 }
 
 void AFoxPlayerController::Move(const FInputActionValue& InputActionValue)

@@ -47,18 +47,16 @@ public:
 	
 protected:
 	
-	
-	
-private:
-	
 	/*
 	 * OverlayWidget - The Runtime Instance of the Main UI Overlay
 	 * This is the actual widget object that gets created and displayed on screen during gameplay. It shows the
 	 * player's HUD elements like health bars, mana bars, and other UI components. This gets instantiated from
 	 * OverlayWidgetClass when InitOverlay() is called.
 	 */
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "UI")
 	TObjectPtr<UFoxUserWidget> OverlayWidget;
+	
+private:
 
 	/*
 	 * OverlayWidgetClass - The Blueprint Class Template for the Overlay Widget

@@ -60,6 +60,9 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
 	
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
+	void OnMenuToggled(bool bOpened);
+	
 private:
 	
 	// IMC set in the blueprint for this class
@@ -77,6 +80,13 @@ private:
 	// Input action set in the blueprint for this class
 	UPROPERTY(EditAnywhere, Category = "Input")
 	TObjectPtr<UInputAction> ShiftAction;
+	
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TObjectPtr<UInputAction> MenuAction;
+
+	void ToggleMenu();
+	
+	bool bIsMenuOpen = false;
 	
 	// Input action callbacks
 	void ShiftPressed() { bShiftKeyDown = true; };
